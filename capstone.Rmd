@@ -1,0 +1,110 @@
+---
+title: "Capstone"
+output: html_document
+date: "2024-10-22"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Load in the Dataset
+```{r pressure, echo=FALSE}
+tuition_data<-read.csv("/Users/jiawendavis/Downloads/Top Universities - Sheet1 (1).csv")
+```
+
+```{r}
+# Load necessary library
+library(tidyverse)
+
+# Convert all tuition-related columns to numeric before pivoting
+tuition_data_long <- tuition_data %>%
+  # Convert all columns that start with "X20" to numeric to ensure consistent data type
+  mutate(across(starts_with("X20"), as.numeric)) %>%
+  # Select all columns up to "State" (position 6) and the tuition columns
+  select(1:6, starts_with("X20")) %>%
+  # Pivot tuition columns to long format
+  pivot_longer(
+    cols = starts_with("X20"),         # Select yearly tuition columns
+    names_to = c("Year", "Tuition_Type"), # New columns for year and tuition type
+    names_pattern = "X(\\d{4}\\.\\d{4})\\..*(In.State|OOS)", # Regex to split year and type
+    values_to = "Tuition"             # Column for tuition values
+  ) %>%
+  # Clean up the Tuition_Type column and reformat Year
+  mutate(
+    Tuition_Type = recode(Tuition_Type, "In.State" = "In-State", "OOS" = "Out-of-State"),
+    Year = gsub("\\.", "-", Year) # Replace '.' with '-' in Year for consistency
+  )
+
+tuition_data_long <- na.omit(tuition_data_long) #omits columns related to enrollment and net price
+
+# View transformed data
+head(tuition_data_long)
+
+```
+
+```{r}
+# Load necessary libraries
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+
+# Assuming tuition_data_long is your transformed dataset from above code
+# Group data by Public or Private, Year, and Tuition_Type and calculate mean tuition
+means <- tuition_data_long %>%
+  group_by(Public.or.Private, Year, Tuition_Type) %>%
+  summarise(Mean_Tuition = mean(Tuition, na.rm = TRUE))
+
+# Create Profile Plot
+plot <- ggplot(means, aes(x = Year, y = Mean_Tuition, color = Public.or.Private, group = Public.or.Private)) +
+  geom_line(size = 1.2) +
+  geom_point(size = 3) +
+  facet_wrap(~ Tuition_Type) +
+  theme_minimal() +
+  labs(title = "Profile Plot of Public vs. Private College Tuition",
+       x = "Academic Year", y = "Average Tuition (USD)",
+       color = "Institution Type") +
+  scale_color_manual(values = c("Public" = "blue", "Private" = "red")) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))  # Rotate x-axis labels for readability
+
+print(plot)
+```
+
+```{r}
+# Load necessary libraries
+library(tidyverse)
+
+# Define Ivy League colleges
+ivy_league <- c("Harvard", "Yale", "Princeton", "Columbia", 
+                "Brown", "Dartmouth", "University of Pennsylvania", "Cornell")
+
+# Filter data for Ivy League and Other Private schools
+ivy_data <- tuition_data_long %>%
+  filter(City %in% ivy_league) 
+
+other_private_data <- tuition_data_long %>%
+  filter(!(City %in% ivy_league) & Public.or.Private == "Private") 
+
+# Create a boxplot to compare tuition
+ggplot() +
+  geom_boxplot(data = ivy_data, aes(x = "Ivy League", y = Tuition), fill = "lightblue", alpha = 0.6) +
+  geom_boxplot(data = other_private_data, aes(x = "Other Private", y = Tuition), fill = "salmon", alpha = 0.6) +
+  labs(title = "Tuition Comparison: Ivy League vs. Other Private Schools",
+       x = "School Type", y = "Tuition") +
+  theme_minimal()
+
+# t-test to compare the means of the two groups
+t_test_result <- t.test(ivy_data$Tuition, other_private_data$Tuition)
+
+# Print the results of the t-test
+print(t_test_result)
+
+```
+The p-value is less than the common alpha level of 0.05. This means we can reject the null hypothesis, which posits that there is no difference in mean tuition between the two groups. The data suggests there is a statistically significant difference.
+
+The 95% confidence interval for the difference in means is between -7385.991 and -1634.531. This interval does not include zero, further supporting the conclusion that there is a significant difference in tuition. Specifically, we can say that, on average, Ivy League schools charge between approximately $1,634 and $7,386 less than other private institutions.
+
+Mean of Ivy League (x): 49,332.00
+Mean of Other Private (y): 53,842.26
+This shows that the average tuition for Ivy League schools is approximately $4,510 less than for other private schools.
+
